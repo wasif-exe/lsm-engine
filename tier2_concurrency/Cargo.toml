@@ -1,0 +1,28 @@
+[package]
+name = "tier2_concurrency"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+
+[target.'cfg(loom)'.dependencies]
+loom = "0.7"
+
+[dev-dependencies]
+criterion = { version = "0.5", features = ["html_reports"] }
+
+[profile.release]
+opt-level = 3
+codegen-units = 1
+lto = "fat"
+panic = "abort"
+
+[profile.bench]
+opt-level = 3
+codegen-units = 1
+lto = "fat"
+debug = true
+
+[[bench]]
+name = "queue_bench"
+harness = false

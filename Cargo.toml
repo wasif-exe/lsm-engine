@@ -1,0 +1,16 @@
+[workspace]
+members = [
+    "uring-engine",
+    "tier2_concurrency",
+    "tier3_storage",
+]
+resolver = "2"
+
+[workspace.package]
+edition = "2021"
+
+[profile.release]
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+debug = true

@@ -1,0 +1,21 @@
+[package]
+name = "uring-engine"
+version = "0.1.0"
+edition = "2021"
+
+[profile.release]
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+panic = "abort"
+debug = true         # Keep debug symbols for perf/flamegraph
+overflow-checks = false
+
+[profile.release.package."*"]
+opt-level = 3
+
+[dependencies]
+libc = "0.2"
+tokio = { version = "1.38", features = ["full"] }
+tier2_concurrency = { path = "../tier2_concurrency" }
+tier3_storage = { path = "../tier3_storage" }
