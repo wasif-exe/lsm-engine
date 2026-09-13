@@ -4,7 +4,7 @@ use std::arch::x86_64::*;
 const BITS_PER_KEY: usize = 10;
 const BYTES_PER_BLOCK: usize = 32;
 
-// 8 distinct prime multipliers for the 8 × 32-bit lanes
+
 const SALTS: [u32; 8] = [
     0x47b6137b, 0x44974d91, 0x8824ad5b, 0xa2b7289d,
     0x705495c7, 0x2df1424b, 0x9efc4947, 0x5c6bfb31,
@@ -95,7 +95,7 @@ impl<'a> BloomFilter<'a> {
         #[cfg(target_arch = "x86_64")]
         {
             if is_x86_feature_detected!("avx2") {
-                // SAFETY: avx2 feature verified dynamically by runtime detection.
+
                 return unsafe { self.contains_avx2(block, h32) };
             }
         }
@@ -106,7 +106,7 @@ impl<'a> BloomFilter<'a> {
     #[cfg(target_arch = "x86_64")]
     #[target_feature(enable = "avx2")]
     unsafe fn contains_avx2(&self, block: &[u8], h: u32) -> bool {
-        // SAFETY: block is guaranteed to be 32 bytes by constructor invariant.
+
         let block_vec = _mm256_loadu_si256(block.as_ptr() as *const __m256i);
         let hash_vec = _mm256_set1_epi32(h as i32);
         let salts_vec = _mm256_loadu_si256(SALTS.as_ptr() as *const __m256i);
@@ -116,8 +116,7 @@ impl<'a> BloomFilter<'a> {
         let ones = _mm256_set1_epi32(1);
         let mask = _mm256_sllv_epi32(ones, shifted);
 
-        // _mm256_testc_si256 returns 1 if (NOT block_vec AND mask) == 0
-        // which proves every set bit in mask is present in block_vec.
+
         _mm256_testc_si256(block_vec, mask) != 0
     }
 

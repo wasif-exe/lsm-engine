@@ -26,7 +26,6 @@ impl PartialOrd for MergeElement {
     }
 }
 
-// Min-heap ordering: lowest key first; on tie, highest sequence number first.
 impl Ord for MergeElement {
     fn cmp(&self, other: &Self) -> Ordering {
         other.key.cmp(&self.key)
@@ -69,7 +68,7 @@ impl StreamingKWayMerge {
             let current_val = top.val;
             let current_seq = top.seq;
 
-            // Fetch next item from the same iterator
+
             if let Some((k, v, s)) = iters[src].next_kv() {
                 heap.push(MergeElement {
                     key: k,
@@ -79,14 +78,13 @@ impl StreamingKWayMerge {
                 });
             }
 
-            // Deduplication: if key matches previously emitted key, discard (older seq num).
             if let Some(ref prev) = last_emitted_key {
                 if prev == &current_key {
                     continue;
                 }
             }
 
-            // At bottom level, drop tombstones permanently (Space Reclamation)
+
             if is_bottom_level && current_val.is_none() {
                 last_emitted_key = Some(current_key);
                 continue;

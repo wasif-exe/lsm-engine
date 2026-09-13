@@ -12,10 +12,10 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 use std::path::PathBuf;
 
-// Tier 2 imports
+
 use tier2_concurrency::queue::{MPMCQueue, QueueError};
 
-// Tier 3 imports
+
 use tier3_storage::EngineNode;
 
 const BUF_RING_ENTRIES: u32 = 4096;
@@ -56,7 +56,6 @@ fn main() -> io::Result<()> {
     }
     let stats = Arc::new(stats_vec);
 
-    // Bounded MPMC queues for inter-core task replication
     let mut queues_vec = Vec::with_capacity(num_cores);
     for _ in 0..num_cores {
         queues_vec.push(Arc::new(MPMCQueue::<InterCoreTask>::new(2048)));
@@ -176,10 +175,9 @@ fn run_worker(
         BUF_SIZE,
     )?;
 
-    // Open Core-Local EngineNode instance
+
     let mut db_node = EngineNode::open(&core_db_dir)?;
-    
-    // Core-local registration with Tier 2 EBR memory collector
+
     let ebr_thread_idx = db_node.collector().register();
 
     let listener = create_reuseport_listener(8080)?;
@@ -192,16 +190,14 @@ fn run_worker(
     let my_stats = &stats[core_id];
     let inbound_queue = &queues[core_id];
 
-    // Simple sequence counter for Core-Local engine records
     let mut local_sequence = 1u64;
 
     loop {
-        // Dynamic wait on completions
+
         ring.submit_and_wait(1)?;
 
         let mut recycled_any = false;
 
-        // Cooperative scheduling: Drain up to 16 tasks routed from other cores
         for _ in 0..16 {
             match inbound_queue.pop() {
                 Ok(InterCoreTask::ReplicateWrite { key, val }) => {
@@ -243,14 +239,13 @@ fn run_worker(
 
                 sys::IORING_OP_RECV => {
                     if res <= 0 {
-                        // -ENOBUFS is -105. We handle it gracefully instead of closing the client.
                         if res == -105 {
-                            // Temporary buffer exhaustion: re-prep RECV multishot so the kernel continues once buffers are recycled
+
                             if let Some(sqe) = ring.get_sqe() {
                                 op::prep_recv_multishot(sqe, fd, BUFFER_GROUP_ID);
                             }
                         } else {
-                            // Actual disconnection or network error: clean up socket
+
                             if let Some(sqe) = ring.get_sqe() {
                                 op::prep_close(sqe, fd);
                             } else {
@@ -264,7 +259,7 @@ fn run_worker(
                             let bid = (flags >> sys::IORING_CQE_BUFFER_SHIFT) as u16;
                             let buf_ptr = buf_ring.get_buffer_ptr(bid);
 
-                            // Simple binary protocol parser: 
+
                             let parsed_ok = if bytes_read >= 9 {
                                 unsafe {
                                     let cmd = *buf_ptr;
@@ -278,9 +273,9 @@ fn run_worker(
                                         let k_bytes = key.to_be_bytes();
                                         let v_bytes = val.to_be_bytes();
                                         
-                                        // If WAL capacity is reached, rotate it asynchronously
+
                                         if let Err(_) = db_node.put(&k_bytes, &v_bytes, local_sequence, ebr_thread_idx) {
-                                            // Handle WAL limit: flush node synchronously
+
                                             db_node.sync().ok();
                                         }
                                         local_sequence += 1;

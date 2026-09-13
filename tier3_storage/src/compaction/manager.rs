@@ -48,10 +48,10 @@ impl LeveledCompactor {
             return None;
         }
 
-        // Collect all L0 files
+
         let l0_files: Vec<PathBuf> = self.l0.iter().map(|m| m.path.clone()).collect();
 
-        // Calculate overarching key range across all L0
+
         let mut min_k: Option<Vec<u8>> = None;
         let mut max_k: Option<Vec<u8>> = None;
 
@@ -69,7 +69,7 @@ impl LeveledCompactor {
         let min_k = min_k.unwrap();
         let max_k = max_k.unwrap();
 
-        // Find overlapping L1 files
+
         let mut overlapping_l1_paths = Vec::new();
         let mut remaining_l1 = Vec::new();
 
@@ -89,7 +89,7 @@ impl LeveledCompactor {
 
         StreamingKWayMerge::merge(&merge_inputs, &out_path, true).expect("compaction merge failed");
 
-        // Open newly created L1 SSTable to inspect full key boundaries
+
         let reader = SSTableReader::open(&out_path).expect("failed to open compacted sst");
         let smallest = reader.get_first_key().unwrap_or_default();
         let largest = reader.get_last_key().unwrap_or_default();
@@ -101,11 +101,11 @@ impl LeveledCompactor {
             largest_key: largest,
         });
 
-        // Sort L1 monotonically by key range
+
         remaining_l1.sort_by(|a, b| a.smallest_key.cmp(&b.smallest_key));
         self.l1 = remaining_l1;
 
-        // Delete compacted source files from disk
+
         for p in merge_inputs {
             fs::remove_file(p).ok();
         }

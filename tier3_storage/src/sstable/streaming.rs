@@ -16,7 +16,6 @@ pub struct StreamingSSTableIterator {
     current_block_iter: Option<BlockIter<'static>>,
 }
 
-// SAFETY: Underlying file mapped PROT_READ and never mutated.
 unsafe impl Send for StreamingSSTableIterator {}
 unsafe impl Sync for StreamingSSTableIterator {}
 
@@ -30,7 +29,7 @@ impl StreamingSSTableIterator {
             return Err(io::Error::new(io::ErrorKind::InvalidData, "file too small"));
         }
 
-        // SAFETY: Direct read-only mapping.
+
         let raw_ptr = unsafe {
             libc::mmap(
                 std::ptr::null_mut(),
@@ -47,7 +46,7 @@ impl StreamingSSTableIterator {
         }
 
         let mmap_ptr = NonNull::new(raw_ptr as *mut u8).unwrap();
-        // SAFETY: Valid mapped span.
+
         let full_slice = unsafe { std::slice::from_raw_parts(mmap_ptr.as_ptr(), file_len) };
 
         let footer = Footer::decode(&full_slice[file_len - FOOTER_SIZE..])?;
@@ -105,8 +104,7 @@ impl StreamingSSTableIterator {
         let start = entry.offset as usize;
         let len = entry.len as usize;
 
-        // SAFETY: mmap_ptr is live and block offsets are bounds-checked.
-        // Cast lifetime to 'static since the iterator owns the mapping and drops it when destroyed.
+
         let block_slice = unsafe {
             std::slice::from_raw_parts(self.mmap_ptr.as_ptr().add(start), len)
         };
@@ -133,7 +131,7 @@ impl StreamingSSTableIterator {
 
 impl Drop for StreamingSSTableIterator {
     fn drop(&mut self) {
-        // SAFETY: Deallocate valid mmap handle.
+
         unsafe {
             libc::munmap(self.mmap_ptr.as_ptr() as *mut libc::c_void, self.mmap_len);
         }

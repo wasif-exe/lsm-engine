@@ -87,30 +87,27 @@ impl ConcurrentSkipList {
         let node_ptr = Node::new(key, val, seq, height);
         let node = unsafe { &*node_ptr };
 
-        // --- STAGE 1: COMMIT POINT (LEVEL 0) ---
-        // We must successfully link level 0 first. This is our single point of linearization.
+
         loop {
             let mut preds = [ptr::null_mut(); MAX_HEIGHT];
             let mut succs = [ptr::null_mut(); MAX_HEIGHT];
             self.find_position(&node.key, &mut preds, &mut succs);
 
             node.next[0].store(succs[0], Ordering::Relaxed);
-            
-            // SAFETY: Head pointer is always valid.
+
             let pred = if preds[0].is_null() { unsafe { &*self.head } } else { unsafe { &*preds[0] } };
             
             if pred.next[0]
                 .compare_exchange(succs[0], node_ptr, Ordering::Release, Ordering::Acquire)
                 .is_ok()
             {
-                // Level 0 successfully linked! The node is now logically committed.
+
                 break;
             }
-            // If Level 0 CAS failed, another thread inserted a node right before us. Retry.
+
         }
 
-        // --- STAGE 2: SPLINE LINKING (LEVELS 1..HEIGHT) ---
-        // Link levels 1..height one-by-one. If a CAS fails, we re-find predecessors for that level and retry.
+
         for level in 1..height {
             loop {
                 let mut preds = [ptr::null_mut(); MAX_HEIGHT];
@@ -121,15 +118,14 @@ impl ConcurrentSkipList {
                 
                 let pred = if preds[level].is_null() { unsafe { &*self.head } } else { unsafe { &*preds[level] } };
                 
-                // Try to link this level
                 if pred.next[level]
                     .compare_exchange(succs[level], node_ptr, Ordering::Release, Ordering::Acquire)
                     .is_ok()
                 {
-                    // Level linked, advance to next level
+
                     break;
                 }
-                // CAS failed for this level. Retry linking this level without affecting lower levels.
+
             }
         }
 
@@ -143,7 +139,7 @@ impl ConcurrentSkipList {
         let mut level = self.max_height.load(Ordering::Acquire);
 
         loop {
-            // SAFETY: Node pointers traversed are valid memory.
+
             let curr_node = unsafe { &*curr };
             next_ptr = curr_node.next[level - 1].load(Ordering::Acquire);
 
@@ -181,7 +177,7 @@ impl ConcurrentSkipList {
 
             while !next.is_null() {
                 let next_node = unsafe { &*next };
-                // Stop search if key matches or exceeds target key
+
                 if next_node.key.as_slice() < key {
                     curr = next;
                     next = next_node.next[level - 1].load(Ordering::Acquire);
@@ -201,7 +197,7 @@ impl ConcurrentSkipList {
     }
 
     pub fn iter(&self) -> SkipListIterator {
-        // SAFETY: Head pointer is non-null.
+
         let first = unsafe { (*self.head).next[0].load(Ordering::Acquire) };
         SkipListIterator { curr: first }
     }

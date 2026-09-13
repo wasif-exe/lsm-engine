@@ -21,7 +21,7 @@ pub struct SSTableReader {
     footer: Footer,
 }
 
-// SAFETY: SSTable memory is immutable and mapped PROT_READ.
+
 unsafe impl Send for SSTableReader {}
 unsafe impl Sync for SSTableReader {}
 
@@ -35,7 +35,7 @@ impl SSTableReader {
             return Err(io::Error::new(io::ErrorKind::InvalidData, "file too small for sstable"));
         }
 
-        // SAFETY: fd is open, map size matches file length, memory read-only.
+
         let raw_ptr = unsafe {
             libc::mmap(
                 std::ptr::null_mut(),
@@ -52,7 +52,7 @@ impl SSTableReader {
         }
 
         let mmap_ptr = NonNull::new(raw_ptr as *mut u8).unwrap();
-        // SAFETY: [raw_ptr, raw_ptr + file_len) valid.
+
         let full_slice = unsafe { std::slice::from_raw_parts(mmap_ptr.as_ptr(), file_len) };
 
         let footer = Footer::decode(&full_slice[file_len - FOOTER_SIZE..])?;
@@ -132,7 +132,7 @@ impl SSTableReader {
             return None;
         }
 
-        // SAFETY: mmap_ptr valid for mmap_len bytes.
+
         let block_slice = unsafe {
             std::slice::from_raw_parts(self.mmap_ptr.as_ptr().add(start), entry.len as usize)
         };
@@ -150,7 +150,7 @@ impl SSTableReader {
         if start + len > self.mmap_len {
             return None;
         }
-        // SAFETY: mmap_ptr valid for mmap_len bytes.
+
         unsafe {
             Some(std::slice::from_raw_parts(self.mmap_ptr.as_ptr().add(start), len))
         }
@@ -175,7 +175,7 @@ impl SSTableReader {
 
 impl Drop for SSTableReader {
     fn drop(&mut self) {
-        // SAFETY: munmap for valid mapped region.
+
         unsafe {
             libc::munmap(self.mmap_ptr.as_ptr() as *mut libc::c_void, self.mmap_len);
         }

@@ -27,7 +27,6 @@ impl WalWriter {
         let cpath = CString::new(path.as_ref().as_os_str().as_encoded_bytes())
             .map_err(|e| io::Error::new(io::ErrorKind::InvalidInput, e))?;
 
-        // SAFETY: Path and flags are valid libc parameters. Removed O_DSYNC for high-throughput buffering.
         let raw_fd: c_int = unsafe {
             libc::open(
                 cpath.as_ptr(),
@@ -71,7 +70,6 @@ impl WalWriter {
             *b = 0;
         }
 
-        // SAFETY: File descriptor and aligned pointer offsets are valid.
         let written = unsafe {
             pwrite(
                 self.fd.as_raw_fd(),
@@ -107,14 +105,12 @@ impl WalWriter {
     }
 
     pub fn sync(&self) -> io::Result<()> {
-        // SAFETY: fd is valid.
         let rc = unsafe { fsync(self.fd.as_raw_fd()) };
         if rc < 0 { Err(io::Error::last_os_error()) } else { Ok(()) }
     }
 
     pub fn truncate_to_logical_end(&self) -> io::Result<()> {
         let logical_end = self.sector_offset + self.tail_offset as u64;
-        // SAFETY: fd is valid.
         let rc = unsafe { ftruncate(self.fd.as_raw_fd(), logical_end as libc::off_t) };
         if rc < 0 { Err(io::Error::last_os_error()) } else { Ok(()) }
     }

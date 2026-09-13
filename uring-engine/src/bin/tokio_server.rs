@@ -1,4 +1,4 @@
-//! Standard Production-Grade Multi-Threaded Tokio Echo Server
+
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpListener;
 

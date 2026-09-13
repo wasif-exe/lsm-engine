@@ -57,10 +57,8 @@ fn main() {
                 }
                 
                 if active_streams == 0 {
-                    // All connections dropped by server -> exit thread cleanly
                     break;
                 }
-                // Yield thread briefly to prevent overwhelming the socket buffers
                 thread::sleep(Duration::from_micros(200));
             }
         });

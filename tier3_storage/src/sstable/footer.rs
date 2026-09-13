@@ -1,7 +1,7 @@
 use std::io;
 
 pub const FOOTER_SIZE: usize = 40;
-pub const SSTABLE_MAGIC: u64 = 0x53535441424C4531; // "SSTABLE1"
+pub const SSTABLE_MAGIC: u64 = 0x53535441424C4531;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Footer {
