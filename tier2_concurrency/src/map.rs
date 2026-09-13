@@ -63,7 +63,6 @@ impl<K: Eq + Hash, V> ConcurrentHashMap<K, V> {
                 continue;
             }
 
-            // SAFETY: EBR guarantees this pointer remains valid inside the guard.
             let entry = unsafe { &*ptr };
             if entry.key == *key {
                 return Some(f(&entry.value));
@@ -99,7 +98,6 @@ impl<K: Eq + Hash, V> ConcurrentHashMap<K, V> {
                 }
             }
 
-            // SAFETY: EBR guarantees safety of this pointer.
             let entry = unsafe { &*curr };
             if &entry.key == unsafe { &(*new_entry).key } {
                 match slot.compare_exchange(
@@ -146,7 +144,6 @@ impl<K: Eq + Hash, V> ConcurrentHashMap<K, V> {
                 continue;
             }
 
-            // SAFETY: EBR guarantees this pointer remains valid inside the guard.
             let entry = unsafe { &*curr };
             if entry.key == *key {
                 match slot.compare_exchange(

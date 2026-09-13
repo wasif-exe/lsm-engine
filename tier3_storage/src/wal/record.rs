@@ -126,7 +126,7 @@ mod tests {
     fn crc_detects_corruption() {
         let mut buf = vec![0u8; HEADER_SIZE + 4];
         encode_record(1, b"data", &mut buf).unwrap();
-        buf[HEADER_SIZE + 2] ^= 0xFF; // flip a bit in payload
+        buf[HEADER_SIZE + 2] ^= 0xFF; 
         assert!(matches!(decode_record(&buf, None), Err(WalError::CorruptCrc { .. })));
     }
 

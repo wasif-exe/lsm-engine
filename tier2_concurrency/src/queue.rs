@@ -60,7 +60,6 @@ impl<T> MPMCQueue<T> {
                     Ordering::Relaxed,
                 ) {
                     Ok(_) => {
-                        // SAFETY: Slot reservation successful via atomic CAS on tail.
                         unsafe {
                             slot.value.with_mut(|ptr| {
                                 core::ptr::write(ptr, MaybeUninit::new(data));
@@ -97,7 +96,6 @@ impl<T> MPMCQueue<T> {
                     Ordering::Relaxed,
                 ) {
                     Ok(_) => {
-                        // SAFETY: Slot access guaranteed safe via atomic CAS on head.
                         let data = unsafe {
                             slot.value.with(|ptr| core::ptr::read(ptr).assume_init())
                         };
@@ -170,7 +168,6 @@ impl<T> UnpaddedMPMCQueue<T> {
                     Ordering::Relaxed,
                 ) {
                     Ok(_) => {
-                        // SAFETY: Slot reservation successful via atomic CAS on tail.
                         unsafe {
                             slot.value.with_mut(|ptr| {
                                 core::ptr::write(ptr, MaybeUninit::new(data));
@@ -207,7 +204,6 @@ impl<T> UnpaddedMPMCQueue<T> {
                     Ordering::Relaxed,
                 ) {
                     Ok(_) => {
-                        // SAFETY: Slot access guaranteed safe via atomic CAS on head.
                         let data = unsafe {
                             slot.value.with(|ptr| core::ptr::read(ptr).assume_init())
                         };

@@ -116,16 +116,10 @@ impl Collector {
         let state = &self.registry[thread_index];
         let global = self.global_epoch.load(Ordering::Relaxed);
         state.epoch.store(global, Ordering::Release);
-        // Full fence prevents reads inside the critical section from being
-        // reordered before the pin store, preventing observation of stale data.
         fence(Ordering::SeqCst);
         Guard { collector: self, thread_index }
     }
 
-    /// Advances the global epoch from E to (E+1) mod 3.
-    /// SAFETY INVARIANT: All active threads MUST be pinned to the current global
-    /// epoch E (or UNPINNED). Any thread pinned to E-1 blocks advancement,
-    /// because reclaiming (E+1) mod 3 would free memory those threads may see.
     pub fn try_advance(&self) -> bool {
         let current_global = self.global_epoch.load(Ordering::Acquire);
 

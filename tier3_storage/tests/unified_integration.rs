@@ -12,12 +12,10 @@ fn test_unified_system_flow() {
     let thread_count = 4;
     let ops_per_thread = 5000;
 
-    // Simulate pinned Tier 1 network threads executing put requests
     for t in 0..thread_count {
         let engine_clone = engine.clone();
         
         let handle = thread::spawn(move || {
-            // Register this thread with the engine's EBR collector ONCE at startup
             let thread_idx = {
                 let node = engine_clone.lock().unwrap();
                 node.collector().register()
@@ -32,7 +30,6 @@ fn test_unified_system_flow() {
                 node.put(&key, &val, seq, thread_idx).unwrap();
             }
 
-            // Cleanly unregister thread on termination
             {
                 let node = engine_clone.lock().unwrap();
                 node.collector().unregister(thread_idx);
@@ -45,10 +42,8 @@ fn test_unified_system_flow() {
         t.join().unwrap();
     }
 
-    // Read back data under EBR memory protection
     let node = engine.lock().unwrap();
-    
-    // Register temporary thread index for the main test verification thread
+
     let main_thread_idx = node.collector().register();
 
     for t in 0..thread_count {

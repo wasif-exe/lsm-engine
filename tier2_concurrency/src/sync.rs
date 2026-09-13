@@ -1,11 +1,3 @@
-//! Standard vs. Loom Portability Layer.
-//!
-//! Under `cfg(not(loom))`, this compiles down to a zero-cost re-export
-//! of `core::sync::atomic` and `core::cell::UnsafeCell`.
-//!
-//! Under `cfg(loom)`, it swaps in Loom's instrumented atomics for
-//! exhaustive state-space model checking.
-
 #[cfg(not(loom))]
 pub mod atomic {
     pub use core::sync::atomic::{
@@ -30,8 +22,6 @@ pub mod cell {
             self.0.get()
         }
 
-        /// # Safety
-        /// Caller must uphold aliasing invariants (no concurrent access).
         #[inline(always)]
         pub unsafe fn with<F, R>(&self, f: F) -> R
         where
@@ -40,8 +30,6 @@ pub mod cell {
             f(self.get())
         }
 
-        /// # Safety
-        /// Caller must uphold aliasing invariants (exclusive access).
         #[inline(always)]
         pub unsafe fn with_mut<F, R>(&self, f: F) -> R
         where
@@ -57,7 +45,6 @@ pub mod atomic {
     pub use loom::sync::atomic::{
         fence, AtomicBool, AtomicPtr, AtomicU64, AtomicUsize, Ordering,
     };
-    // Re-export standard compiler_fence for Loom compiles since Loom doesn't track compile-only fences.
     pub use core::sync::atomic::compiler_fence;
 }
 

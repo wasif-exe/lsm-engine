@@ -14,7 +14,7 @@ fn test_sstable_build_and_read() {
         let val = format!("val-{:06}", i).into_bytes();
         writer.append(&key, Some(&val), i as u64).unwrap();
     }
-    writer.finish().unwrap(); // Correct zero-argument call
+    writer.finish().unwrap(); 
 
     let reader = SSTableReader::open(&sst_path).unwrap();
 
@@ -39,7 +39,7 @@ fn test_sstable_tombstones() {
     writer.append(b"k1", Some(b"v1"), 1).unwrap();
     writer.append(b"k2", None, 2).unwrap();
     writer.append(b"k3", Some(b"v3"), 3).unwrap();
-    writer.finish().unwrap(); // Correct zero-argument call
+    writer.finish().unwrap(); 
 
     let reader = SSTableReader::open(&sst_path).unwrap();
     assert_eq!(reader.get(b"k1"), Some((Some(b"v1".to_vec()), 1)));

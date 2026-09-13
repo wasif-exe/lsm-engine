@@ -133,7 +133,6 @@ fn run_mutex_bench(threads: usize) {
 
 fn bench_queues(c: &mut Criterion) {
     let mut group = c.benchmark_group("Contended_Queue_Throughput");
-    // Run benchmarks with active concurrent physical thread pairs
     for thread_count in [1, 2, 4].iter() {
         group.bench_with_input(
             BenchmarkId::new("MPMC_Padded", thread_count),

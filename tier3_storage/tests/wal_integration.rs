@@ -47,8 +47,6 @@ fn crash_simulation_torn_tail_recovers_valid_prefix() {
 
     let dir = tempdir().unwrap();
     let path = dir.path().join("wal.log");
-
-    // Write 100 records.
     {
         let mut w = WalWriter::open(&path).unwrap();
         for i in 0..100 {
@@ -57,16 +55,13 @@ fn crash_simulation_torn_tail_recovers_valid_prefix() {
         w.sync().unwrap();
     }
 
-    // Simulate crash: chop last 37 bytes off the file.
     let f = OpenOptions::new().write(true).open(&path).unwrap();
     let len = f.metadata().unwrap().len();
     f.set_len(len - 37).unwrap();
 
-    // Recovery must return SOME prefix without erroring, and truncate cleanly.
     let (records, _truncate_to) = RecoveryScanner::open(&path).unwrap().replay_all();
     assert!(records.len() > 0);
     assert!(records.len() <= 100);
-    // All returned records must have monotonic sequence numbers.
     for w in records.windows(2) {
         assert!(w[0].seq < w[1].seq);
     }
@@ -88,8 +83,6 @@ fn crash_simulation_bitflip_stops_replay() {
         w.sync().unwrap();
     }
 
-    // 50 records × ~22 bytes ≈ 1100 bytes of valid data in a 4096-byte sector.
-    // Flip a bit at offset 80 (inside the 4th-5th record's CRC/payload region).
     let mut f = OpenOptions::new().read(true).write(true).open(&path).unwrap();
     f.seek(SeekFrom::Start(80)).unwrap();
     let mut b = [0u8; 1];

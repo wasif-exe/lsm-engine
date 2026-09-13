@@ -5,12 +5,8 @@ use std::sync::atomic::AtomicU64;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, RwLock};
 use std::thread;
-
-// Tier 2 imports
 use tier2_concurrency::ebr::Collector;
 use tier2_concurrency::queue::{MPMCQueue, QueueError};
-
-// Tier 3 imports
 use crate::compaction::LeveledCompactor;
 use crate::memtable::manager::FlushTask;
 use crate::memtable::skiplist::ConcurrentSkipList;
@@ -23,21 +19,15 @@ pub struct EngineNode {
     wal: WalWriter,
     wal_path: PathBuf,
     _db_dir: PathBuf,
-
-    // Tier 2 concurrency primitives
     collector: Arc<Collector>,
     flush_queue: Arc<MPMCQueue<FlushTask>>,
-
-    // L1/L0 Read metadata
     compactor: Arc<RwLock<LeveledCompactor>>,
     _next_sst_id: Arc<AtomicU64>,
-
     is_running: Arc<AtomicBool>,
     bg_workers: Vec<thread::JoinHandle<()>>,
 }
 
 impl EngineNode {
-    /// Open a unified storage engine instance at `db_dir`.
     pub fn open<P: AsRef<Path>>(db_dir: P) -> io::Result<Self> {
         let db_dir = db_dir.as_ref().to_path_buf();
         fs::create_dir_all(&db_dir)?;
@@ -46,7 +36,6 @@ impl EngineNode {
         let wal = WalWriter::open(&wal_path)?;
 
         let collector = Arc::new(Collector::new());
-        // Pre-allocate bounded MPMC Vyukov queue (must be power of two)
         let flush_queue = Arc::new(MPMCQueue::<FlushTask>::new(1024));
 
         let next_sst_id = Arc::new(AtomicU64::new(1));
@@ -54,8 +43,6 @@ impl EngineNode {
 
         let is_running = Arc::new(AtomicBool::new(true));
         let mut bg_workers = Vec::new();
-
-        // Spawn unpinned background I/O workers to handle flushes and compactions
         for _ in 0..2 {
             let queue = flush_queue.clone();
             let running = is_running.clone();
@@ -63,7 +50,6 @@ impl EngineNode {
             let collector_clone = collector.clone();
 
             let handle = thread::spawn(move || {
-                // Register background thread with Tier 2 EBR collector
                 let thread_idx = collector_clone.register();
 
                 while running.load(Ordering::Relaxed) {
@@ -78,39 +64,31 @@ impl EngineNode {
                             let sst_path = task.wal_path.with_extension(format!("sst.{}", sst_id));
                             let mut writer = crate::sstable::writer::SSTableWriter::create(&sst_path).unwrap();
 
-                            // Streaming write from frozen MemTable to SSTable
                             let mut iter = task.memtable.iter();
                             while let Some((k, v, seq)) = iter.next() {
                                 writer.append(&k, v.as_deref(), seq).unwrap();
                             }
                             writer.finish().unwrap();
-
-                            // Open fresh reader and acquire boundaries
                             let reader = SSTableReader::open(&sst_path).unwrap();
                             let smallest = reader.get_first_key().unwrap();
                             let largest = reader.get_last_key().unwrap();
-
-                            // Lock compactor metadata and promote SST to L0
                             {
                                 let mut guard = compactor_clone.write().unwrap();
                                 guard.add_l0_table(sst_path, smallest, largest);
                                 guard.maybe_schedule_compaction();
                             }
 
-                            // Clean WAL file
                             if task.wal_path.exists() {
                                 let _ = fs::remove_file(task.wal_path);
                             }
                         }
                         Err(QueueError::Empty) => {
-                            // Non-blocking backoff: park briefly if queue is empty
                             thread::park_timeout(std::time::Duration::from_millis(10));
                         }
                         _ => {}
                     }
                 }
 
-                // Cleanly unregister background thread from EBR on exit
                 collector_clone.unregister(thread_idx);
             });
             bg_workers.push(handle);
@@ -131,8 +109,6 @@ impl EngineNode {
         })
     }
 
-    /// Executed directly by Tier 1 network event loops (pinned cores).
-    /// Binds lock-free mutations under Epoch-Based memory safety.
     pub fn put(&mut self, key: &[u8], value: &[u8], seq: u64, thread_idx: usize) -> Result<(), WalError> {
         let collector = self.collector.clone();
         let _guard = collector.pin(thread_idx);
@@ -155,14 +131,10 @@ impl EngineNode {
             payload.extend_from_slice(v);
         }
 
-        // 1. Write to durably aligned Direct-I/O WAL
         self.wal.append(&payload)?;
-
-        // 2. Insert into Lock-Free SkipList MemTable
         let val_vec = value.map(|v| v.to_vec());
         self.active_mem.insert(key.to_vec(), val_vec, seq);
 
-        // 3. Evaluate freeze threshold
         if self.active_mem.approximate_size() >= crate::memtable::manager::MEMTABLE_LIMIT {
             self.freeze_active_memtable();
         }
@@ -170,28 +142,22 @@ impl EngineNode {
         Ok(())
     }
 
-    /// Read path executed by Tier 1 thread-per-core loops.
-    /// Accesses lock-free indexes under EBR protection without locking.
     pub fn get(&self, key: &[u8], thread_idx: usize) -> Option<(Option<Vec<u8>>, u64)> {
         let collector = self.collector.clone();
         let _guard = collector.pin(thread_idx);
 
-        // 1. Check in-memory active MemTable
         if let Some(res) = self.active_mem.get(key) {
             return Some(res);
         }
 
-        // 2. Check in-memory immutable MemTable (if swapping)
         if let Some(ref imm) = self.imm_mem {
             if let Some(res) = imm.get(key) {
                 return Some(res);
             }
         }
 
-        // 3. Fallback to mapped SSTables (read-only locks)
         let compactor_guard = self.compactor.read().unwrap();
 
-        // Scan L0 first (might overlap)
         for table in compactor_guard.l0.iter().rev() {
             if key >= &table.smallest_key && key <= &table.largest_key {
                 if let Ok(reader) = SSTableReader::open(&table.path) {
@@ -202,7 +168,7 @@ impl EngineNode {
             }
         }
 
-        // Scan L1 via binary search
+
         let target_idx = match compactor_guard.l1.binary_search_by(|m| m.smallest_key.as_slice().cmp(key)) {
             Ok(idx) => Some(idx),
             Err(idx) if idx > 0 => Some(idx - 1),
@@ -227,13 +193,11 @@ impl EngineNode {
 
     fn freeze_active_memtable(&mut self) {
         if self.imm_mem.is_some() {
-            // Write stall: immutable memtable is still writing to disk.
             return;
         }
 
         self.wal.sync().ok();
 
-        // Swapping active memtable with clean instance
         let old_mem = std::mem::replace(&mut self.active_mem, Arc::new(ConcurrentSkipList::new()));
         self.imm_mem = Some(old_mem.clone());
 
@@ -249,18 +213,16 @@ impl EngineNode {
             wal_path: old_wal_path,
         };
 
-        // Enqueue to Tier 2 MPMC Vyukov queue
+
         if let Err((_err, _discarded_task)) = self.flush_queue.push(task) {
             eprintln!("Flush queue full, dropping task!");
         }
     }
 
-    /// Exposes access to the underlying EBR collector for Tier 1 thread registration
     pub fn collector(&self) -> &Collector {
         &self.collector
     }
 
-    /// Explicitly flushes and synchronizes the active Write-Ahead Log (WAL) to disk.
     pub fn sync(&self) -> io::Result<()> {
         self.wal.sync()
     }
